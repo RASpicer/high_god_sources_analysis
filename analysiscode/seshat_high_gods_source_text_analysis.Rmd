@@ -1,0 +1,194 @@
+---
+title: "Text Sources for High Gods from the Seshat Database"
+author: "Analysis by Rachel Spicer, GitHub:RASpicer"
+date: "2019/03/19"
+output: 
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    theme: cerulean
+---
+
+```{r setup, include=FALSE}
+library(plyr)
+library(tidyverse)
+library(DT)
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, error = FALSE, tidy=TRUE, message = FALSE)
+```
+
+# Data Collection
+
+"exportdat.csv" and "polities.csv" were obtained from https://github.com/pesavage/moralizing-gods on 20th March 2019. 
+
+Data in "HighGodSourceRaw.csv" was obtained by manually extracting and classifying data from the Seshat database (http://seshatdatabank.info/nature/) on 25th March 2019. 
+
+## Copyright Usage Statement
+This research employed data from the Seshat Databank (seshatdatabank.info) under Creative Commons Attribution Non-Commercial (CC By-NC SA) licensing (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
+
+The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official positions, either expressed or implied, of the Seshat Databank, its collaborative scholarly community, or the Evolution Institute.
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Citation
+
+[Whitehouse, Francois, Savage, et al. (2019) Complex societies precede moralizing gods throughout world history. Nature.](https://www.nature.com/articles/s41586-019-1043-4)
+
+[Turchin, P. et al. (2018) Quantitative historical analysis uncovers a single dimension of complexity that structures global variation in human social organization. Proc. Natl. Acad. Sci. U. S. A. 115, E144-E151.](https://www.pnas.org/content/115/2/E144)
+
+[Turchin, P. (2018) Fitting dynamic regression models to Seshat data. Cliodynamics 9(1):25-58.](https://escholarship.org/uc/item/99x6r11m)
+
+[Turchin P. et al. 2015. Seshat: The Global History Databank. Cliodynamics 6(1):77-107.](https://escholarship.org/uc/item/9qx38718)
+
+
+# Data Analysis
+
+Text source data for the high gods classification of polities is joined with data of time periods of each polity and the value of the high gods variable. 
+
+```{r datacleaning}
+# Load data
+seshat <- read.csv('../data/exportdat.csv', stringsAsFactors = FALSE)
+polities <- read.csv('../data/polities.csv', stringsAsFactors = FALSE)
+high_god_source <- read.csv('../data/HighGodSourceRaw.csv', stringsAsFactors = FALSE)
+
+# Remove polities not used in the original research
+#### Remove new NGAs
+polities <- polities[polities$NGA != "Crete",] 
+polities <- polities[polities$NGA != "Galilee",]
+polities <- polities[polities$NGA != "Middle Ganga",]
+#### Remove low-coverage polities causing bugs in C. Java)
+polities <- polities[polities$PolID != "IdCJBun",] 
+polities <- polities[polities$PolID != "IdKalin",] 
+polities <- polities[polities$PolID != "EsHabsb",] 
+#### Remove post-colonial polities (also see below for removing post-colonial polities from NGAs with only 2 polities)
+polities <- polities[polities$PolID != "USIllinL",]
+polities <- polities[polities$PolID != "GbEmpir",]
+polities <- polities[polities$PolID != "InEInCo",]
+polities <- polities[polities$PolID != "InBritP",]
+polities <- polities[polities$PolID != "RuYakuL",]
+polities <- polities[polities$PolID != "UsIroqL",]
+
+# Combine source data with polity data
+high_god_pol <- left_join(high_god_source, polities)
+
+# extract seshat data on Moralising High Gods
+HighGod <- seshat[grep("High God", seshat$Variable),]
+colnames(HighGod)[2] <- "PolID"
+
+# Combine with Values
+high_god_data <- left_join(high_god_pol, HighGod)
+# Convert to numeric for calculating MHG
+high_god_data$Value.No <- revalue(high_god_data$Value.From, c(
+                                                      "absent" = "0",
+                                                      "inactive" = "1",
+                                                      "active" = "2",
+                                                      "moralizing" = "3",
+                                                      "monotheistic" = "1",
+                                                      "polytheistic" = "2",
+                                                      "not applicable" = "unknown",
+                                                      "suspected unknown" = "unknown"))
+# replace unknown with NA
+high_god_data$Value.No[high_god_data$Value.No == "unknown"] <- NA 
+
+# calculate MHG values
+high_god_data$MoralisingHighGods <- ifelse(high_god_data$Value.No == 3, 1, 0)
+
+# Change BCE to negative years and remove CE. 
+# Start date
+high_god_data$Date.From <- if_else(grepl("B", high_god_data$Date.From), paste0("-",high_god_data$Date.From), high_god_data$Date.From)
+high_god_data$Date.From <- gsub("BCE", "", high_god_data$Date.From)
+high_god_data$Date.From <- gsub("CE", "", high_god_data$Date.From)
+# End date
+high_god_data$Date.To <- if_else(grepl("B", high_god_data$Date.To), paste0("-",high_god_data$Date.To), high_god_data$Date.To)
+high_god_data$Date.To <- gsub("BCE", "", high_god_data$Date.To)
+high_god_data$Date.To <- gsub("CE", "", high_god_data$Date.To)
+
+# if there is a data range, replace start and end dates with these values
+high_god_data$Start.Date <- as.numeric(ifelse(high_god_data$Date.From != "", high_god_data$Date.From, high_god_data$Start))
+high_god_data$End.Date <- as.numeric(ifelse(high_god_data$Date.To != "" | is.na(high_god_data$Date.From) == TRUE, high_god_data$Date.To, high_god_data$End))
+
+# replace missing start/ end dates caused because Date.To/Date.From contained missing values (as this polity & variable combination was not included in exportdat.csv; NA rather than "") with dates originally from polities.csv
+high_god_data$Start.Date <- as.numeric(ifelse(is.na(high_god_data$Date.From) == TRUE, high_god_data$Start, high_god_data$Start.Date))
+high_god_data$End.Date <- as.numeric(ifelse(is.na(high_god_data$Date.To) == TRUE, high_god_data$End, high_god_data$End.Date))
+
+# select and reorder annotated high gods source data
+HighGodOut <- high_god_data %>%
+  select(NGA, PolID, Start.Date, End.Date, Value.From, Value.No, MoralisingHighGods, Text, Number) %>%
+  rename(HighGods = Value.From, HighGods.No = Value.No, SourceText = Text)
+# save annotated data
+write.csv(HighGodOut, "../output/HighGodSource.csv", row.names = F)
+```
+
+# Time Periods of High God Coding Justification per NGA
+
+The time periods of each coding justification for the variable high gods (creator gods) per natural geographic area (NGA). The highest number of unique source texts used for any single NGA is 9, and there are some variables missing source texts, which are labelled as MS.
+
+```{r plot, results = 'asis', fig.width = 9, fig.align = "center"}
+# remove missing dates for plotting
+high_god_data_sub <- high_god_data[!is.na(high_god_data$Start.Date),]
+
+# create new number variable for plotting which replaces 6-9 with 6+
+high_god_data_sub$NumberFull <- high_god_data_sub$Number
+high_god_data_sub$Number <- ifelse(high_god_data_sub$Number == "6" | high_god_data_sub$Number == "7" | high_god_data_sub$Number == "8" |  high_god_data_sub$Number == "9", "6+", high_god_data_sub$Number)
+
+# plot data
+ggplot(data=high_god_data_sub, aes(x=Start.Date, y=reorder(NGA,-Start.Date), color = Number)) +
+  geom_segment(aes(xend=End.Date, yend=NGA), linetype=1, size=2) +
+  scale_x_continuous(breaks=c(-10000,-8000,-6000,-4000,-2000,0,2000)) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "black"), na.value= "#999999") +
+  xlab("Year") +
+  ylab("NGA") +
+  theme_bw() +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.line.x = element_line(color="black", size = 0.5),
+    axis.line.y = element_line(color="black", size = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank())
+
+# save output
+ggsave("../fig/HighGodSourceText.pdf", plot = last_plot(), height = 5, width = 8.5)
+```
+
+# The Frequency of Use of Source Texts
+
+The frequency each text is used a source for high gods within polities. Unfortunately the text will be harder to read, as all punctuation is removed as the source texts for some polities contain the same text but different punctuation, e.g. some include quotation marks around the whole text, whilst others do not, and in some cases "" is used, but in others '' is.
+
+In total there are 50 unique source texts for high gods classification.
+
+A majority of polities do not have a source for their high gods classification (116), however most of theses polities are classified as either unknown (5), suspected unknown (94), or have no value for high gods in 'exportdat.csv' (12). Only 5 polities with other classifications do not have sources (3 moralizing, 1 active and 1 inactive). Of these, USHawai, is not actually included in the original seshat analysis, as it is not included in the "polities.csv" file.
+
+106 polities with unknown or suspected unknown classifications for high gods that had no coding justification were included in the original analysis in Whitehouse et al. (2019). Only 20 polities with an unknown categorisation for high gods had a source.  
+
+```{r sourcefrequency, results = 'asis'}
+# Remove all numbers from sources, as citations have different numbers for each entry i.e. [No.]
+# Note this will also remove other text in square brackets
+Text <-gsub("\\[[^\\]]*\\]", "", high_god_source$Text, perl=TRUE)
+
+# Remove all punctuation from source texts to give an accurate number of different texts (some have "", whilst others do not, but the text itself is the same)
+Text <- gsub("[^[:alnum:] ]", "", Text)
+
+# Remove trailing spaces
+Text <- gsub(" $","", Text, perl=T)
+
+# This still leaves some duplicates, so remove multiple spaces too
+Text <- gsub("  ", " ", Text)
+
+# make a table of the frequency of use of source texts
+TextFreq <- as.data.frame(table(Text))
+# rename columns
+colnames(TextFreq) <- c("Text", "Frequency")
+
+# remove missing values for table
+TextFreqNoNA <- TextFreq[TextFreq$Text != "",]
+
+# reorder data by highest frequency
+TextFreqNoNA <- TextFreqNoNA[order(-TextFreqNoNA$Freq),]
+
+# plot table
+datatable(TextFreqNoNA, rownames = FALSE, class = 'row-border hover order-column')
+```
+
