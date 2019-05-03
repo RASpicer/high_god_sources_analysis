@@ -9,7 +9,7 @@ All analysis was performed using [R version 3.5.3](https://cran.r-project.org/in
  - [tidyverse version 1.2.1](https://cran.r-project.org/web/packages/tidyverse/index.html)
  - [DT version 0.5](https://cran.r-project.org/web/packages/DT/index.html)
 
-The analysis code can be found in analysis-code/seshat_high_gods_source_text_analysis.Rmd. The R Markdown file was generated using [knitr version 1.22](https://cran.r-project.org/web/packages/knitr/index.html).
+The analysis code can be found in [analysis-code/seshat_high_gods_source_text_analysis.Rmd](https://github.com/RASpicer/high_god_sources_analysis/blob/master/analysiscode/seshat_high_gods_source_text_analysis.Rmd). The R Markdown file was generated using [knitr version 1.22](https://cran.r-project.org/web/packages/knitr/index.html).
 
 # Data Collection
 
